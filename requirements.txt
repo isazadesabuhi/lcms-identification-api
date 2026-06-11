@@ -1,0 +1,10 @@
+fastapi
+uvicorn[standard]
+python-multipart
+pandas
+sqlalchemy
+alembic
+pydantic-settings
+python-dotenv
+matchms
+numpy
