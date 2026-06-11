@@ -1,12 +1,30 @@
-import pandas as pd
 from pathlib import Path
+from typing import Any
+
+import pandas as pd
+
+
+def _safe_value(value: Any):
+    """
+    Convert pandas/numpy values into JSON-safe Python values.
+    """
+    if pd.isna(value):
+        return None
+
+    if hasattr(value, "item"):
+        try:
+            return value.item()
+        except Exception:
+            pass
+
+    return value
 
 
 def parse_mzmine_quant_csv(file_path: str | Path, ion_mode: str) -> list[dict]:
     """
     Parse MZmine/GNPS quant CSV file.
 
-    Expected important columns:
+    Important columns in your file:
     - row ID
     - row m/z
     - row retention time
@@ -33,22 +51,29 @@ def parse_mzmine_quant_csv(file_path: str | Path, ion_mode: str) -> list[dict]:
     features = []
 
     for _, row in df.iterrows():
+        row_data = {
+            column: _safe_value(row[column])
+            for column in df.columns
+        }
+
+        peak_areas = {
+            column: _safe_value(row[column])
+            for column in peak_area_columns
+        }
+
         feature = {
-            "feature_id": int(row["row ID"]),
+            "feature_id": str(int(row["row ID"])),
             "mz": float(row["row m/z"]),
-            "retention_time": float(row["row retention time"]),
+            "retention_time_minutes": float(row["row retention time"]),
             "ion_mode": ion_mode.upper(),
-            "peak_areas": {
-                column: float(row[column]) if pd.notna(row[column]) else None
-                for column in peak_area_columns
-            },
-            "best_ion": row.get("best ion") if pd.notna(row.get("best ion")) else None,
+            "peak_areas": peak_areas,
+            "best_ion": _safe_value(row.get("best ion")),
             "neutral_mass": (
                 float(row["neutral M mass"])
                 if "neutral M mass" in df.columns and pd.notna(row["neutral M mass"])
                 else None
             ),
-            "raw_row": row.where(pd.notna(row), None).to_dict(),
+            "raw_row": row_data,
         }
 
         features.append(feature)
