@@ -24,6 +24,7 @@ def show_matches(limit: int = 20):
                 f"Ion mode: {match.ion_mode} | "
                 f"Unknown feature: {unknown.feature_id} | "
                 f"Unknown m/z: {unknown.mz:.6f} | "
+                f"Reference spectrum ID: {reference.id} | "
                 f"Reference: {reference.name} | "
                 f"Reference m/z: {reference.precursor_mz:.6f} | "
                 f"Formula: {reference.formula} | "
