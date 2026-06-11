@@ -13,3 +13,9 @@ results/
 data/**/*.mgf
 data/**/*.mzML
 data/**/*.mzXML
+
+
+*.db
+lcms.db
+data/
+uploads/
