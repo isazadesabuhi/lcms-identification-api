@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-
+from app.services.ms2_similarity_service import score_ms2_for_sample_matches
 from app.db.database import get_db
 from app.db.models import MatchResult, ReferenceSpectrum, UnknownFeature
 from app.services.matching_service import (
@@ -24,6 +24,23 @@ def run_matching(
         ppm_tolerance=ppm_tolerance,
         max_candidates_per_feature=max_candidates_per_feature,
     )
+
+@router.post("/score-ms2/{sample_id}")
+def score_ms2_matches(
+    sample_id: int,
+    mz_tolerance: float = Query(default=0.02, gt=0),
+    min_ms2_score: float = Query(default=0.7, ge=0, le=1),
+    limit: int | None = Query(default=1000, gt=0),
+    db: Session = Depends(get_db),
+):
+    return score_ms2_for_sample_matches(
+        db=db,
+        sample_id=sample_id,
+        mz_tolerance=mz_tolerance,
+        min_ms2_score=min_ms2_score,
+        limit=limit,
+    )
+
 
 @router.get("/results/{sample_id}")
 def get_matching_results(
