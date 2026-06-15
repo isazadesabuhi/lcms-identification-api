@@ -25,7 +25,6 @@ def run_matching(
         max_candidates_per_feature=max_candidates_per_feature,
     )
 
-
 @router.get("/results/{sample_id}")
 def get_matching_results(
     sample_id: int,

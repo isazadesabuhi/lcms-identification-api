@@ -218,3 +218,92 @@ def get_ranked_results_for_sample(
         "features_with_candidates": len(results),
         "results": results,
     }
+
+
+
+def get_ranked_results_for_sample(
+    db: Session,
+    sample_id: int,
+    limit_features: int = 50,
+    candidates_per_feature: int = 3,
+) -> dict:
+    """
+    Return ranked identification candidates for each unknown feature.
+
+    Ranking:
+    1. Highest MS2 score first
+    2. Lowest ppm error second
+    """
+
+    unknown_features = (
+        db.query(UnknownFeature)
+        .filter(UnknownFeature.sample_id == sample_id)
+        .limit(limit_features)
+        .all()
+    )
+
+    results = []
+
+    for feature in unknown_features:
+        matches = (
+            db.query(MatchResult, ReferenceSpectrum)
+            .join(
+                ReferenceSpectrum,
+                MatchResult.reference_spectrum_id == ReferenceSpectrum.id,
+            )
+            .filter(MatchResult.unknown_feature_id == feature.id)
+            .order_by(
+                func.coalesce(MatchResult.ms2_score, -1).desc(),
+                MatchResult.ppm_error.asc(),
+            )
+            .limit(candidates_per_feature)
+            .all()
+        )
+
+        if not matches:
+            continue
+
+        candidates = []
+
+        for match, reference in matches:
+            candidates.append(
+                {
+                    "match_id": match.id,
+                    "confidence_level": match.confidence_level,
+                    "ppm_error": match.ppm_error,
+                    "mz_error": match.mz_error,
+                    "ms2_score": match.ms2_score,
+                    "reference": {
+                        "spectrum_id": reference.id,
+                        "name": reference.name,
+                        "formula": reference.formula,
+                        "adduct": reference.adduct,
+                        "precursor_mz": reference.precursor_mz,
+                        "retention_time_seconds": reference.retention_time_seconds,
+                        "smiles": reference.smiles,
+                    },
+                }
+            )
+
+        results.append(
+            {
+                "unknown_feature": {
+                    "id": feature.id,
+                    "feature_id": feature.feature_id,
+                    "mz": feature.mz,
+                    "retention_time_minutes": feature.retention_time_minutes,
+                    "ion_mode": feature.ion_mode,
+                    "best_ion": feature.best_ion,
+                    "neutral_mass": feature.neutral_mass,
+                },
+                "candidates": candidates,
+            }
+        )
+
+    return {
+        "sample_id": sample_id,
+        "limit_features": limit_features,
+        "candidates_per_feature": candidates_per_feature,
+        "features_with_candidates": len(results),
+        "results": results,
+    }
