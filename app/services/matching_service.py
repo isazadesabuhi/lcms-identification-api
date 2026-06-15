@@ -3,6 +3,12 @@ from sqlalchemy.orm import Session
 
 from app.db.models import MatchResult, ReferenceSpectrum, UnknownFeature
 
+from app.services.scoring_service import (
+    assign_confidence_level,
+    calculate_mz_score,
+    calculate_overall_score,
+)
+
 
 def calculate_ppm_error(unknown_mz: float, reference_mz: float) -> float:
     """
@@ -266,13 +272,24 @@ def get_ranked_results_for_sample(
         candidates = []
 
         for match, reference in matches:
+            mz_score = calculate_mz_score(match.ppm_error)
+
+            overall_score = calculate_overall_score(
+                ppm_error=match.ppm_error,
+                ms2_score=match.ms2_score,
+            )
+
+            confidence = assign_confidence_level(match.ms2_score)
+
             candidates.append(
                 {
                     "match_id": match.id,
-                    "confidence_level": match.confidence_level,
+                    "confidence_level": confidence,
                     "ppm_error": match.ppm_error,
                     "mz_error": match.mz_error,
+                    "mz_score": mz_score,
                     "ms2_score": match.ms2_score,
+                    "overall_score": overall_score,
                     "reference": {
                         "spectrum_id": reference.id,
                         "name": reference.name,
