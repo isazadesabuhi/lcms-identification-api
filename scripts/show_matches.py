@@ -10,7 +10,7 @@ def show_matches(limit: int = 20):
             db.query(MatchResult, UnknownFeature, ReferenceSpectrum)
             .join(UnknownFeature, MatchResult.unknown_feature_id == UnknownFeature.id)
             .join(ReferenceSpectrum, MatchResult.reference_spectrum_id == ReferenceSpectrum.id)
-            .order_by(MatchResult.ppm_error.asc())
+            .order_by(MatchResult.ms2_score.desc().nullslast(), MatchResult.ppm_error.asc())
             .limit(limit)
             .all()
         )
@@ -30,6 +30,7 @@ def show_matches(limit: int = 20):
                 f"Formula: {reference.formula} | "
                 f"Adduct: {reference.adduct} | "
                 f"ppm error: {match.ppm_error:.3f} | "
+                f"MS2 score: {match.ms2_score if match.ms2_score is not None else 'Not scored'} | "
                 f"Confidence: {match.confidence_level}"
             )
 

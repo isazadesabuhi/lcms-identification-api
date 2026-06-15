@@ -12,12 +12,14 @@ router = APIRouter()
 def run_matching(
     sample_id: int,
     ppm_tolerance: float = Query(default=10.0, gt=0),
+    max_candidates_per_feature: int = Query(default=5, gt=0, le=50),
     db: Session = Depends(get_db),
 ):
     return run_mz_matching_for_sample(
         db=db,
         sample_id=sample_id,
         ppm_tolerance=ppm_tolerance,
+        max_candidates_per_feature=max_candidates_per_feature,
     )
 
 

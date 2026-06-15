@@ -6,15 +6,13 @@ def main():
     db = SessionLocal()
 
     try:
-        # If you imported NEG first and POS second, usually:
-        # sample_id=1 => unknown_neg_fbmn
-        # sample_id=2 => unknown_pos_fbmn
-
         print("Running NEG sample matching...")
         neg_result = run_mz_matching_for_sample(
             db=db,
             sample_id=1,
             ppm_tolerance=10.0,
+            max_candidates_per_feature=5,
+            clear_previous_results=True,
         )
         print(neg_result)
 
@@ -23,6 +21,8 @@ def main():
             db=db,
             sample_id=2,
             ppm_tolerance=10.0,
+            max_candidates_per_feature=5,
+            clear_previous_results=True,
         )
         print(pos_result)
 
