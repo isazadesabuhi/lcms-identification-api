@@ -82,3 +82,42 @@ def assign_confidence_level(ms2_score: float | None) -> str:
         return "MZ_MS2_MEDIUM"
 
     return "MZ_MS2_LOW"
+
+
+def assign_identification_level(
+    mz_match: bool,
+    rt_match: bool,
+    formula_match: bool,
+    adduct_match: bool,
+    ms2_match: bool,
+) -> str:
+    """
+    Assign confidence level based on supervisor's L1-L5 logic.
+
+    Current limitation:
+    - Unknown formula/adduct are not yet clearly available from the uploaded unknown files.
+    - Therefore L1/L2/L3/L5 may not appear until formula/adduct extraction is added.
+    """
+
+    if rt_match and mz_match and formula_match and adduct_match and ms2_match:
+        return "L1"
+
+    if mz_match and formula_match and adduct_match and ms2_match:
+        return "L2"
+
+    if formula_match and ms2_match:
+        return "L3"
+
+    if ms2_match:
+        return "L4"
+
+    if formula_match:
+        return "L5"
+
+    if mz_match and rt_match:
+        return "MZ_RT_CANDIDATE"
+
+    if mz_match:
+        return "MZ_ONLY_CANDIDATE"
+
+    return "NO_CONFIDENT_MATCH"

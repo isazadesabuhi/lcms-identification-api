@@ -5,6 +5,7 @@ from app.db.models import MatchResult, ReferenceSpectrum, UnknownFeature
 
 from app.services.scoring_service import (
     assign_confidence_level,
+    assign_identification_level,
     calculate_mz_score,
     calculate_overall_score,
     calculate_rt_score,
@@ -207,7 +208,23 @@ def get_ranked_results_for_sample(
                 rt_error_seconds=rt_error_seconds,
             )
 
-            confidence = assign_confidence_level(match.ms2_score)
+            mz_match = match.ppm_error is not None and match.ppm_error <= 10
+
+            rt_match = rt_score is not None and rt_score > 0
+
+            ms2_match = match.ms2_score is not None and match.ms2_score >= 0.7
+
+            # Not available yet from unknown CSV/MGF
+            formula_match = False
+            adduct_match = False
+
+            confidence = assign_identification_level(
+                mz_match=mz_match,
+                rt_match=rt_match,
+                formula_match=formula_match,
+                adduct_match=adduct_match,
+                ms2_match=ms2_match,
+            )
 
             candidates.append(
                 {
