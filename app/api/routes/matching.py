@@ -4,6 +4,7 @@ from app.services.ms2_similarity_service import score_ms2_for_sample_matches
 from app.db.database import get_db
 from app.db.models import MatchResult, ReferenceSpectrum, UnknownFeature
 from app.services.matching_service import (
+    get_matching_summary_for_sample,
     get_ranked_results_for_sample,
     run_mz_matching_for_sample,
 )
@@ -104,4 +105,20 @@ def get_ranked_results(
         sample_id=sample_id,
         limit_features=limit_features,
         candidates_per_feature=candidates_per_feature,
+    )
+
+@router.get("/summary/{sample_id}")
+def get_matching_summary(
+    sample_id: int,
+    ppm_tolerance: float = Query(default=10.0, gt=0),
+    ms2_threshold: float = Query(default=0.7, ge=0, le=1),
+    top_limit: int = Query(default=10, gt=0, le=100),
+    db: Session = Depends(get_db),
+):
+    return get_matching_summary_for_sample(
+        db=db,
+        sample_id=sample_id,
+        ppm_tolerance=ppm_tolerance,
+        ms2_threshold=ms2_threshold,
+        top_limit=top_limit,
     )

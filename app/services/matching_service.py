@@ -4,7 +4,6 @@ from sqlalchemy.orm import Session
 from app.db.models import MatchResult, ReferenceSpectrum, UnknownFeature
 
 from app.services.scoring_service import (
-    assign_confidence_level,
     assign_identification_level,
     calculate_mz_score,
     calculate_overall_score,
@@ -270,4 +269,119 @@ def get_ranked_results_for_sample(
         "candidates_per_feature": candidates_per_feature,
         "features_with_candidates": len(results),
         "results": results,
+    }
+
+def get_matching_summary_for_sample(
+    db: Session,
+    sample_id: int,
+    ppm_tolerance: float = 10.0,
+    ms2_threshold: float = 0.7,
+    top_limit: int = 10,
+) -> dict:
+    """
+    Return a high-level matching summary for one unknown sample.
+    """
+
+    total_features = (
+        db.query(UnknownFeature)
+        .filter(UnknownFeature.sample_id == sample_id)
+        .count()
+    )
+
+    rows = (
+        db.query(MatchResult, UnknownFeature, ReferenceSpectrum)
+        .join(UnknownFeature, MatchResult.unknown_feature_id == UnknownFeature.id)
+        .join(ReferenceSpectrum, MatchResult.reference_spectrum_id == ReferenceSpectrum.id)
+        .filter(UnknownFeature.sample_id == sample_id)
+        .all()
+    )
+
+    confidence_counts = {}
+    features_with_candidates = set()
+    scored_ms2_candidates = 0
+    strong_ms2_candidates = 0
+    ranked_candidates = []
+
+    for match, feature, reference in rows:
+        features_with_candidates.add(feature.id)
+
+        unknown_rt_seconds = (
+            feature.retention_time_minutes * 60
+            if feature.retention_time_minutes is not None
+            else None
+        )
+
+        reference_rt_seconds = reference.retention_time_seconds
+
+        rt_error_seconds = None
+
+        if unknown_rt_seconds is not None and reference_rt_seconds is not None:
+            rt_error_seconds = abs(unknown_rt_seconds - reference_rt_seconds)
+
+        rt_score = calculate_rt_score(rt_error_seconds)
+
+        mz_match = match.ppm_error is not None and match.ppm_error <= ppm_tolerance
+        rt_match = rt_score is not None and rt_score > 0
+        ms2_match = match.ms2_score is not None and match.ms2_score >= ms2_threshold
+
+        # Current limitation: unknown formula/adduct are not yet available
+        formula_match = False
+        adduct_match = False
+
+        confidence = assign_identification_level(
+            mz_match=mz_match,
+            rt_match=rt_match,
+            formula_match=formula_match,
+            adduct_match=adduct_match,
+            ms2_match=ms2_match,
+        )
+
+        confidence_counts[confidence] = confidence_counts.get(confidence, 0) + 1
+
+        if match.ms2_score is not None:
+            scored_ms2_candidates += 1
+
+        if ms2_match:
+            strong_ms2_candidates += 1
+
+        overall_score = calculate_overall_score(
+            ppm_error=match.ppm_error,
+            ms2_score=match.ms2_score,
+            rt_error_seconds=rt_error_seconds,
+        )
+
+        ranked_candidates.append(
+            {
+                "unknown_feature_id": feature.feature_id,
+                "unknown_mz": feature.mz,
+                "ion_mode": feature.ion_mode,
+                "reference_name": reference.name,
+                "reference_formula": reference.formula,
+                "reference_adduct": reference.adduct,
+                "reference_mz": reference.precursor_mz,
+                "ppm_error": match.ppm_error,
+                "ms2_score": match.ms2_score,
+                "rt_error_seconds": rt_error_seconds,
+                "overall_score": overall_score,
+                "confidence_level": confidence,
+            }
+        )
+
+    ranked_candidates = sorted(
+        ranked_candidates,
+        key=lambda item: (
+            item["overall_score"] if item["overall_score"] is not None else 0
+        ),
+        reverse=True,
+    )[:top_limit]
+
+    return {
+        "sample_id": sample_id,
+        "total_unknown_features": total_features,
+        "features_with_candidates": len(features_with_candidates),
+        "total_candidate_matches": len(rows),
+        "scored_ms2_candidates": scored_ms2_candidates,
+        "strong_ms2_candidates": strong_ms2_candidates,
+        "confidence_counts": confidence_counts,
+        "top_candidates": ranked_candidates,
     }
