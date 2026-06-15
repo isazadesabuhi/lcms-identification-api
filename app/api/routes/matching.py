@@ -3,7 +3,10 @@ from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.db.models import MatchResult, ReferenceSpectrum, UnknownFeature
-from app.services.matching_service import run_mz_matching_for_sample
+from app.services.matching_service import (
+    get_ranked_results_for_sample,
+    run_mz_matching_for_sample,
+)
 
 router = APIRouter()
 
@@ -71,3 +74,18 @@ def get_matching_results(
         "count": len(results),
         "results": results,
     }
+
+
+@router.get("/ranked-results/{sample_id}")
+def get_ranked_results(
+    sample_id: int,
+    limit_features: int = Query(default=50, gt=0, le=500),
+    candidates_per_feature: int = Query(default=3, gt=0, le=20),
+    db: Session = Depends(get_db),
+):
+    return get_ranked_results_for_sample(
+        db=db,
+        sample_id=sample_id,
+        limit_features=limit_features,
+        candidates_per_feature=candidates_per_feature,
+    )
