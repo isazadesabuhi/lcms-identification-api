@@ -14,10 +14,6 @@ from app.db.models import (
 
 
 def _prepare_peaks(peaks: Iterable) -> list[tuple[float, float]]:
-    """
-    Convert SQLAlchemy peak objects into sorted (mz, intensity) tuples.
-    Ignores zero or negative intensities.
-    """
     prepared = []
 
     for peak in peaks:
@@ -37,14 +33,6 @@ def calculate_cosine_similarity(
     reference_peaks,
     mz_tolerance: float = 0.02,
 ) -> tuple[float, int]:
-    """
-    Simple MS2 cosine similarity using m/z tolerance.
-
-    Returns:
-    - cosine score between 0 and 1
-    - number of matched peaks
-    """
-
     unknown = _prepare_peaks(unknown_peaks)
     reference = _prepare_peaks(reference_peaks)
 
@@ -91,12 +79,13 @@ def score_ms2_for_sample_matches(
     limit: int | None = None,
 ) -> dict:
     """
-    For each MatchResult of a sample:
-    - find the unknown spectrum linked by feature_id
-    - find reference spectrum peaks
-    - calculate MS2 cosine similarity
-    - update MatchResult.ms2_score
-    - update confidence_level
+    Optimized MS2 scoring.
+
+    Improvements:
+    - loads unknown spectra once
+    - caches unknown peaks
+    - caches reference peaks
+    - avoids repeated queries for the same feature/reference spectrum
     """
 
     query = (
@@ -112,16 +101,29 @@ def score_ms2_for_sample_matches(
 
     rows = query.all()
 
+    unknown_spectra = (
+        db.query(UnknownSpectrum)
+        .filter(UnknownSpectrum.sample_id == sample_id)
+        .all()
+    )
+
+    unknown_spectrum_by_feature_id = {
+        spectrum.feature_id: spectrum
+        for spectrum in unknown_spectra
+        if spectrum.feature_id is not None
+    }
+
+    unknown_peaks_cache = {}
+    reference_peaks_cache = {}
+
     scored_matches = 0
     matches_with_unknown_spectrum = 0
     matches_above_threshold = 0
+    total_matched_peaks = 0
 
     for match, unknown_feature, reference_spectrum in rows:
-        unknown_spectrum = (
-            db.query(UnknownSpectrum)
-            .filter(UnknownSpectrum.sample_id == sample_id)
-            .filter(UnknownSpectrum.feature_id == unknown_feature.feature_id)
-            .first()
+        unknown_spectrum = unknown_spectrum_by_feature_id.get(
+            str(unknown_feature.feature_id)
         )
 
         if unknown_spectrum is None:
@@ -129,17 +131,22 @@ def score_ms2_for_sample_matches(
 
         matches_with_unknown_spectrum += 1
 
-        unknown_peaks = (
-            db.query(UnknownPeak)
-            .filter(UnknownPeak.spectrum_id == unknown_spectrum.id)
-            .all()
-        )
+        if unknown_spectrum.id not in unknown_peaks_cache:
+            unknown_peaks_cache[unknown_spectrum.id] = (
+                db.query(UnknownPeak)
+                .filter(UnknownPeak.spectrum_id == unknown_spectrum.id)
+                .all()
+            )
 
-        reference_peaks = (
-            db.query(ReferencePeak)
-            .filter(ReferencePeak.spectrum_id == reference_spectrum.id)
-            .all()
-        )
+        if reference_spectrum.id not in reference_peaks_cache:
+            reference_peaks_cache[reference_spectrum.id] = (
+                db.query(ReferencePeak)
+                .filter(ReferencePeak.spectrum_id == reference_spectrum.id)
+                .all()
+            )
+
+        unknown_peaks = unknown_peaks_cache[unknown_spectrum.id]
+        reference_peaks = reference_peaks_cache[reference_spectrum.id]
 
         score, matched_peaks = calculate_cosine_similarity(
             unknown_peaks=unknown_peaks,
@@ -156,6 +163,7 @@ def score_ms2_for_sample_matches(
             match.confidence_level = "MZ_ONLY"
 
         scored_matches += 1
+        total_matched_peaks += matched_peaks
 
     db.commit()
 
@@ -167,4 +175,7 @@ def score_ms2_for_sample_matches(
         "matches_above_ms2_threshold": matches_above_threshold,
         "mz_tolerance": mz_tolerance,
         "min_ms2_score": min_ms2_score,
+        "unique_unknown_spectra_used": len(unknown_peaks_cache),
+        "unique_reference_spectra_used": len(reference_peaks_cache),
+        "total_matched_peaks": total_matched_peaks,
     }
