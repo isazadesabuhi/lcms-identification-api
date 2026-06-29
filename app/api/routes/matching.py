@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 from app.services.ms2_similarity_service import score_ms2_for_sample_matches
 from app.db.database import get_db
@@ -8,6 +9,10 @@ from app.services.matching_service import (
     get_ranked_results_for_sample,
     run_mz_matching_for_sample,
 )
+
+from io import StringIO
+
+from app.services.export_service import generate_ranked_results_csv
 
 router = APIRouter()
 
@@ -121,4 +126,33 @@ def get_matching_summary(
         ppm_tolerance=ppm_tolerance,
         ms2_threshold=ms2_threshold,
         top_limit=top_limit,
+    )
+
+
+@router.get("/export-csv/{sample_id}")
+def export_ranked_results_csv(
+    sample_id: int,
+    ppm_tolerance: float = Query(default=10.0, gt=0),
+    ms2_threshold: float = Query(default=0.7, ge=0, le=1),
+    limit: int = Query(default=1000, gt=0, le=10000),
+    db: Session = Depends(get_db),
+):
+    csv_content = generate_ranked_results_csv(
+        db=db,
+        sample_id=sample_id,
+        ppm_tolerance=ppm_tolerance,
+        ms2_threshold=ms2_threshold,
+        limit=limit,
+    )
+
+    file_like = StringIO(csv_content)
+
+    filename = f"sample_{sample_id}_ranked_results.csv"
+
+    return StreamingResponse(
+        file_like,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}"
+        },
     )
