@@ -13,6 +13,7 @@ from app.services.matching_service import (
 from io import StringIO
 
 from app.services.export_service import generate_ranked_results_csv
+from app.tasks import run_mz_matching_task, score_ms2_task
 
 router = APIRouter()
 
@@ -156,3 +157,45 @@ def export_ranked_results_csv(
             "Content-Disposition": f"attachment; filename={filename}"
         },
     )
+
+
+@router.post("/run-task/{sample_id}")
+def run_matching_task_endpoint(
+    sample_id: int,
+    ppm_tolerance: float = Query(default=10.0, gt=0),
+    max_candidates_per_feature: int = Query(default=5, gt=0, le=50),
+):
+    task = run_mz_matching_task.delay(
+        sample_id=sample_id,
+        ppm_tolerance=ppm_tolerance,
+        max_candidates_per_feature=max_candidates_per_feature,
+    )
+
+    return {
+        "message": "m/z matching task executed.",
+        "task_id": task.id,
+        "sample_id": sample_id,
+        "result": task.result,
+    }
+
+
+@router.post("/score-ms2-task/{sample_id}")
+def score_ms2_task_endpoint(
+    sample_id: int,
+    mz_tolerance: float = Query(default=0.02, gt=0),
+    min_ms2_score: float = Query(default=0.7, ge=0, le=1),
+    limit: int | None = Query(default=1000, gt=0),
+):
+    task = score_ms2_task.delay(
+        sample_id=sample_id,
+        mz_tolerance=mz_tolerance,
+        min_ms2_score=min_ms2_score,
+        limit=limit,
+    )
+
+    return {
+        "message": "MS2 scoring task executed.",
+        "task_id": task.id,
+        "sample_id": sample_id,
+        "result": task.result,
+    }
