@@ -2,7 +2,6 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.db.models import MatchResult, ReferenceSpectrum, UnknownFeature
-
 from app.services.scoring_service import (
     assign_identification_level,
     calculate_mz_score,
@@ -270,6 +269,7 @@ def get_ranked_results_for_sample(
         "features_with_candidates": len(results),
         "results": results,
     }
+
 
 def get_matching_summary_for_sample(
     db: Session,
