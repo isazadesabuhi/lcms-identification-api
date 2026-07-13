@@ -11,8 +11,8 @@ def calculate_mz_score(ppm_error: float, ppm_tolerance: float = 10.0) -> float:
 
 
 def calculate_rt_score(
-    rt_error_seconds: float | None,
-    rt_tolerance_seconds: float = 30.0,
+    rt_error_minutes: float | None,
+    rt_tolerance_minutes: float = 0.5,
 ) -> float | None:
     """
     Convert retention time error into a score between 0 and 1.
@@ -20,19 +20,19 @@ def calculate_rt_score(
 
     If RT is missing, return None.
     """
-    if rt_error_seconds is None:
+    if rt_error_minutes is None:
         return None
 
-    score = 1 - (rt_error_seconds / rt_tolerance_seconds)
+    score = 1 - (rt_error_minutes / rt_tolerance_minutes)
     return round(max(0.0, min(1.0, score)), 4)
 
 
 def calculate_overall_score(
     ppm_error: float,
     ms2_score: float | None,
-    rt_error_seconds: float | None = None,
+    rt_error_minutes: float | None = None,
     ppm_tolerance: float = 10.0,
-    rt_tolerance_seconds: float = 30.0,
+    rt_tolerance_minutes: float = 0.5,
 ) -> float:
     """
     Temporary MVP scoring.
@@ -51,7 +51,7 @@ def calculate_overall_score(
     """
 
     mz_score = calculate_mz_score(ppm_error, ppm_tolerance)
-    rt_score = calculate_rt_score(rt_error_seconds, rt_tolerance_seconds)
+    rt_score = calculate_rt_score(rt_error_minutes, rt_tolerance_minutes)
 
     if ms2_score is None:
         if rt_score is None:

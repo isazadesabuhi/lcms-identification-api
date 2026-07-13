@@ -25,6 +25,6 @@ for file_path, ion_mode in files:
         print("  formula:", first["formula"])
         print("  adduct:", first["adduct"])
         print("  precursor_mz:", first["precursor_mz"])
-        print("  retention_time_seconds:", first["retention_time_seconds"])
+        print("  retention_time_minutes:", first["retention_time_minutes"])
         print("  ion_mode:", first["ion_mode"])
         print("  peaks:", len(first["peaks"]))

@@ -149,7 +149,7 @@ def get_ranked_results_for_sample(
 
     Ranking:
     1. Highest MS2 score first
-    2. Lowest ppm error second
+    2. Lowest ppm error next
     """
 
     unknown_features = (
@@ -183,27 +183,22 @@ def get_ranked_results_for_sample(
         candidates = []
 
         for match, reference in matches:
-            unknown_rt_seconds = (
-                feature.retention_time_minutes * 60
-                if feature.retention_time_minutes is not None
-                else None
-            )
+            unknown_rt_minutes = feature.retention_time_minutes
+            reference_rt_minutes = reference.retention_time_minutes
 
-            reference_rt_seconds = reference.retention_time_seconds
+            rt_error_minutes = None
 
-            rt_error_seconds = None
-
-            if unknown_rt_seconds is not None and reference_rt_seconds is not None:
-                rt_error_seconds = abs(unknown_rt_seconds - reference_rt_seconds)
+            if unknown_rt_minutes is not None and reference_rt_minutes is not None:
+                rt_error_minutes = abs(unknown_rt_minutes - reference_rt_minutes)
 
             mz_score = calculate_mz_score(match.ppm_error)
 
-            rt_score = calculate_rt_score(rt_error_seconds)
+            rt_score = calculate_rt_score(rt_error_minutes)
 
             overall_score = calculate_overall_score(
                 ppm_error=match.ppm_error,
                 ms2_score=match.ms2_score,
-                rt_error_seconds=rt_error_seconds,
+                rt_error_minutes=rt_error_minutes,
             )
 
             mz_match = match.ppm_error is not None and match.ppm_error <= 10
@@ -231,7 +226,7 @@ def get_ranked_results_for_sample(
                     "ppm_error": match.ppm_error,
                     "mz_error": match.mz_error,
                     "mz_score": mz_score,
-                    "rt_error_seconds": rt_error_seconds,
+                    "rt_error_minutes": rt_error_minutes,
                     "rt_score": rt_score,
                     "ms2_score": match.ms2_score,
                     "overall_score": overall_score,
@@ -241,7 +236,7 @@ def get_ranked_results_for_sample(
                         "formula": reference.formula,
                         "adduct": reference.adduct,
                         "precursor_mz": reference.precursor_mz,
-                        "retention_time_seconds": reference.retention_time_seconds,
+                        "retention_time_minutes": reference.retention_time_minutes,
                         "smiles": reference.smiles,
                     },
                 }
@@ -305,20 +300,15 @@ def get_matching_summary_for_sample(
     for match, feature, reference in rows:
         features_with_candidates.add(feature.id)
 
-        unknown_rt_seconds = (
-            feature.retention_time_minutes * 60
-            if feature.retention_time_minutes is not None
-            else None
-        )
+        unknown_rt_minutes = feature.retention_time_minutes
+        reference_rt_minutes = reference.retention_time_minutes
 
-        reference_rt_seconds = reference.retention_time_seconds
+        rt_error_minutes = None
 
-        rt_error_seconds = None
+        if unknown_rt_minutes is not None and reference_rt_minutes is not None:
+            rt_error_minutes = abs(unknown_rt_minutes - reference_rt_minutes)
 
-        if unknown_rt_seconds is not None and reference_rt_seconds is not None:
-            rt_error_seconds = abs(unknown_rt_seconds - reference_rt_seconds)
-
-        rt_score = calculate_rt_score(rt_error_seconds)
+        rt_score = calculate_rt_score(rt_error_minutes)
 
         mz_match = match.ppm_error is not None and match.ppm_error <= ppm_tolerance
         rt_match = rt_score is not None and rt_score > 0
@@ -347,7 +337,7 @@ def get_matching_summary_for_sample(
         overall_score = calculate_overall_score(
             ppm_error=match.ppm_error,
             ms2_score=match.ms2_score,
-            rt_error_seconds=rt_error_seconds,
+            rt_error_minutes=rt_error_minutes,
         )
 
         ranked_candidates.append(
@@ -361,7 +351,7 @@ def get_matching_summary_for_sample(
                 "reference_mz": reference.precursor_mz,
                 "ppm_error": match.ppm_error,
                 "ms2_score": match.ms2_score,
-                "rt_error_seconds": rt_error_seconds,
+                "rt_error_minutes": rt_error_minutes,
                 "overall_score": overall_score,
                 "confidence_level": confidence,
             }

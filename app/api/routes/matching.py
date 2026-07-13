@@ -86,7 +86,7 @@ def get_matching_results(
                     "formula": reference.formula,
                     "adduct": reference.adduct,
                     "precursor_mz": reference.precursor_mz,
-                    "retention_time_seconds": reference.retention_time_seconds,
+                    "retention_time_minutes": reference.retention_time_minutes,
                     "smiles": reference.smiles,
                 },
             }

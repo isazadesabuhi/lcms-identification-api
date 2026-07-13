@@ -48,7 +48,7 @@ class ReferenceSpectrum(Base):
     inchi = Column(Text, nullable=True)
 
     precursor_mz = Column(Float, nullable=True, index=True)
-    retention_time_seconds = Column(Float, nullable=True)
+    retention_time_minutes = Column(Float, nullable=True)
     ion_mode = Column(String, nullable=False, index=True)
 
     charge = Column(String, nullable=True)
@@ -135,8 +135,8 @@ class UnknownSpectrum(Base):
 
     precursor_mz = Column(Float, nullable=True, index=True)
 
-    # From MGF: RTINSECONDS is seconds.
-    retention_time_seconds = Column(Float, nullable=True)
+    # From MGF: RTINSECONDS is converted to minutes.
+    retention_time_minutes = Column(Float, nullable=True)
 
     ion_mode = Column(String, nullable=False, index=True)
 
@@ -176,7 +176,7 @@ class MatchResult(Base):
 
     mz_error = Column(Float, nullable=True)
     ppm_error = Column(Float, nullable=True)
-    rt_error_seconds = Column(Float, nullable=True)
+    rt_error_minutes = Column(Float, nullable=True)
     ms2_score = Column(Float, nullable=True)
 
     confidence_level = Column(String, nullable=True)

@@ -41,7 +41,12 @@ def parse_mgf(file_path: str | Path, ion_mode: str | None = None) -> list[dict]:
             if line == "END IONS":
                 if current_metadata is not None:
                     precursor_mz = _to_float(current_metadata.get("PEPMASS"))
-                    retention_time = _to_float(current_metadata.get("RTINSECONDS"))
+                    raw_retention_time = _to_float(current_metadata.get("RTINSECONDS"))
+                    retention_time_minutes = (
+                        raw_retention_time / 60
+                        if raw_retention_time is not None
+                        else None
+                    )
 
                     feature_id = current_metadata.get("FEATURE_ID")
                     scans = current_metadata.get("SCANS")
@@ -60,7 +65,7 @@ def parse_mgf(file_path: str | Path, ion_mode: str | None = None) -> list[dict]:
                         "inchi": current_metadata.get("INCHI"),
                         "ion_mode": ion_mode.upper() if ion_mode else current_metadata.get("IONMODE"),
                         "precursor_mz": precursor_mz,
-                        "retention_time_seconds": retention_time,
+                        "retention_time_minutes": retention_time_minutes,
                         "charge": current_metadata.get("CHARGE"),
                         "ms_level": current_metadata.get("MSLEVEL"),
                         "metadata": current_metadata,
