@@ -10,3 +10,4 @@ matchms
 numpy
 celery
 redis
+rdkit

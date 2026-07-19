@@ -27,6 +27,7 @@ The platform currently uses:
 * m/z matching
 * MS2 spectral similarity scoring
 * Retention time scoring
+* RDKit molecule descriptors from SMILES
 * Ranked candidate results
 * CSV export
 * Celery task structure in eager mode
@@ -101,6 +102,8 @@ POST /matching/score-ms2/{sample_id}
 GET  /matching/ranked-results/{sample_id}
 GET  /matching/summary/{sample_id}
 GET  /matching/export-csv/{sample_id}
+GET  /molecules/describe?smiles={smiles}
+POST /molecules/describe
 ```
 
 Celery-style task endpoints:
@@ -134,6 +137,20 @@ POST /matching/score-ms2/1
 GET  /matching/ranked-results/1
 GET  /matching/summary/1
 GET  /matching/export-csv/1
+```
+
+Molecule descriptor endpoint:
+
+```text
+GET /molecules/describe?smiles=CCO
+```
+
+or:
+
+```json
+{
+  "smiles": "CCO"
+}
 ```
 
 ## Local Setup
