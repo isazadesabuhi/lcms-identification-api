@@ -4,6 +4,21 @@ import { FormEvent, useMemo, useState } from "react";
 
 type JsonValue = null | boolean | number | string | JsonValue[] | { [key: string]: JsonValue };
 
+type ActionKey =
+  | "health"
+  | "samples-status"
+  | "sample-upload"
+  | "reference-upload"
+  | "molecule"
+  | "run"
+  | "score"
+  | "run-task"
+  | "score-task"
+  | "results"
+  | "ranked"
+  | "summary"
+  | "export";
+
 type MatchRow = {
   match_id: number;
   ion_mode: string;
@@ -64,6 +79,22 @@ type MoleculeDescription = {
 
 const defaultApiBase = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
 
+const actionLabels: Record<ActionKey, string> = {
+  health: "Health check",
+  "samples-status": "Samples status",
+  "sample-upload": "Sample upload",
+  "reference-upload": "Reference import",
+  molecule: "Molecule descriptor",
+  run: "m/z matching",
+  score: "MS2 scoring",
+  "run-task": "Queued m/z matching",
+  "score-task": "Queued MS2 scoring",
+  results: "Results fetch",
+  ranked: "Ranked results fetch",
+  summary: "Summary fetch",
+  export: "CSV export",
+};
+
 function formatValue(value: unknown) {
   if (value === null || value === undefined || value === "") return "-";
   if (typeof value === "number") return Number.isInteger(value) ? value.toString() : value.toFixed(4);
@@ -94,12 +125,42 @@ function StatusPill({ tone, children }: { tone: "ready" | "busy" | "error"; chil
   );
 }
 
+function LoadingLine({ active, label }: { active: boolean; label: string }) {
+  if (!active) return null;
+
+  return (
+    <div className="mt-3 flex items-center gap-2 text-sm font-medium text-amber-700" role="status" aria-live="polite">
+      <span className="h-2 w-2 animate-pulse rounded-full bg-amber-500" />
+      {label} is running. Waiting for backend response...
+    </div>
+  );
+}
+
+function buttonText(active: boolean, ready: string, loading: string) {
+  return active ? loading : ready;
+}
+
 export default function Home() {
   const [apiBase, setApiBase] = useState(defaultApiBase);
-  const [busy, setBusy] = useState<string | null>(null);
+  const [loading, setLoading] = useState<Record<ActionKey, boolean>>({
+    health: false,
+    "samples-status": false,
+    "sample-upload": false,
+    "reference-upload": false,
+    molecule: false,
+    run: false,
+    score: false,
+    "run-task": false,
+    "score-task": false,
+    results: false,
+    ranked: false,
+    summary: false,
+    export: false,
+  });
   const [error, setError] = useState<string | null>(null);
   const [sampleUploadResult, setSampleUploadResult] = useState<JsonValue | null>(null);
   const [referenceUploadResult, setReferenceUploadResult] = useState<JsonValue | null>(null);
+  const [diagnosticResult, setDiagnosticResult] = useState<JsonValue | null>(null);
   const [moleculeResult, setMoleculeResult] = useState<MoleculeDescription | null>(null);
   const [operationResult, setOperationResult] = useState<JsonValue | null>(null);
   const [matchingResults, setMatchingResults] = useState<MatchingResults | null>(null);
@@ -118,6 +179,12 @@ export default function Home() {
   const [limit, setLimit] = useState("1000");
 
   const cleanBase = useMemo(() => apiBase.replace(/\/+$/, ""), [apiBase]);
+  const loadingActions = useMemo(
+    () => Object.entries(loading).filter((entry): entry is [ActionKey, boolean] => entry[1]),
+    [loading],
+  );
+  const hasLoading = loadingActions.length > 0;
+  const isLoading = (key: ActionKey) => loading[key];
 
   async function requestJson<T>(path: string, options?: RequestInit): Promise<T> {
     setError(null);
@@ -132,8 +199,8 @@ export default function Home() {
     return payload as T;
   }
 
-  async function runAction<T>(key: string, action: () => Promise<T>, onSuccess: (data: T) => void) {
-    setBusy(key);
+  async function runAction<T>(key: ActionKey, action: () => Promise<T>, onSuccess: (data: T) => void) {
+    setLoading((current) => ({ ...current, [key]: true }));
     setError(null);
 
     try {
@@ -142,7 +209,7 @@ export default function Home() {
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Unexpected request failure");
     } finally {
-      setBusy(null);
+      setLoading((current) => ({ ...current, [key]: false }));
     }
   }
 
@@ -189,7 +256,7 @@ export default function Home() {
   }
 
   async function exportCsv() {
-    setBusy("export");
+    setLoading((current) => ({ ...current, export: true }));
     setError(null);
 
     try {
@@ -214,7 +281,7 @@ export default function Home() {
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "CSV export failed");
     } finally {
-      setBusy(null);
+      setLoading((current) => ({ ...current, export: false }));
     }
   }
 
@@ -251,8 +318,22 @@ export default function Home() {
         </header>
 
         <section className="flex flex-wrap items-center gap-3 rounded-md border border-slate-200 bg-white px-4 py-3">
-          <StatusPill tone={busy ? "busy" : error ? "error" : "ready"}>{busy ? "Request running" : error ? "Request failed" : "Ready"}</StatusPill>
+          <StatusPill tone={hasLoading ? "busy" : error ? "error" : "ready"}>{hasLoading ? "Request running" : error ? "Request failed" : "Ready"}</StatusPill>
           {error ? <span className="text-sm text-rose-700">{error}</span> : <span className="text-sm text-slate-600">Connected target: {cleanBase}</span>}
+          {hasLoading ? <span className="text-sm text-amber-700">Waiting on {loadingActions.map(([key]) => actionLabels[key]).join(", ")}...</span> : null}
+          <div className="ml-auto flex flex-wrap gap-2">
+            <button className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50" disabled={isLoading("health")} onClick={() => runAction("health", () => requestJson<JsonValue>("/health/"), setDiagnosticResult)}>
+              {buttonText(isLoading("health"), "Health", "Checking...")}
+            </button>
+            <button className="h-9 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50" disabled={isLoading("samples-status")} onClick={() => runAction("samples-status", () => requestJson<JsonValue>("/samples/"), setDiagnosticResult)}>
+              {buttonText(isLoading("samples-status"), "Samples status", "Checking...")}
+            </button>
+          </div>
+          <div className="basis-full">
+            <LoadingLine active={isLoading("health")} label="Health check" />
+            <LoadingLine active={isLoading("samples-status")} label="Samples status" />
+            <ResultBlock data={diagnosticResult} />
+          </div>
         </section>
 
         <div className="grid gap-6 xl:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
@@ -263,8 +344,8 @@ export default function Home() {
                   <h2 className="text-lg font-semibold text-slate-950">Unknown Sample</h2>
                   <p className="mt-1 text-sm text-slate-600">POST /samples/upload</p>
                 </div>
-                <button className="h-10 rounded-md bg-teal-700 px-4 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:opacity-50" disabled={busy === "sample-upload"}>
-                  Upload
+                <button className="h-10 rounded-md bg-teal-700 px-4 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:opacity-50" disabled={isLoading("sample-upload")}>
+                  {buttonText(isLoading("sample-upload"), "Upload", "Uploading...")}
                 </button>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -289,6 +370,7 @@ export default function Home() {
                 </label>
               </div>
               <div className="mt-4">
+                <LoadingLine active={isLoading("sample-upload")} label="Sample upload" />
                 <ResultBlock data={sampleUploadResult} />
               </div>
             </form>
@@ -299,8 +381,8 @@ export default function Home() {
                   <h2 className="text-lg font-semibold text-slate-950">Reference Library</h2>
                   <p className="mt-1 text-sm text-slate-600">POST /reference/upload-mgf</p>
                 </div>
-                <button className="h-10 rounded-md bg-slate-900 px-4 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:opacity-50" disabled={busy === "reference-upload"}>
-                  Import
+                <button className="h-10 rounded-md bg-slate-900 px-4 text-sm font-semibold text-white transition hover:bg-slate-700 disabled:opacity-50" disabled={isLoading("reference-upload")}>
+                  {buttonText(isLoading("reference-upload"), "Import", "Importing...")}
                 </button>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
@@ -321,6 +403,7 @@ export default function Home() {
                 </label>
               </div>
               <div className="mt-4">
+                <LoadingLine active={isLoading("reference-upload")} label="Reference import" />
                 <ResultBlock data={referenceUploadResult} />
               </div>
             </form>
@@ -331,14 +414,15 @@ export default function Home() {
                   <h2 className="text-lg font-semibold text-slate-950">Molecule Descriptor</h2>
                   <p className="mt-1 text-sm text-slate-600">POST /molecules/describe</p>
                 </div>
-                <button className="h-10 rounded-md bg-teal-700 px-4 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:opacity-50" disabled={busy === "molecule"}>
-                  Describe
+                <button className="h-10 rounded-md bg-teal-700 px-4 text-sm font-semibold text-white transition hover:bg-teal-800 disabled:opacity-50" disabled={isLoading("molecule")}>
+                  {buttonText(isLoading("molecule"), "Describe", "Describing...")}
                 </button>
               </div>
               <label className="text-sm font-medium text-slate-700">
                 SMILES
                 <input className="mt-1 h-10 w-full rounded-md border border-slate-300 px-3 font-mono text-sm outline-none focus:border-teal-600" required value={smiles} onChange={(event) => setSmiles(event.target.value)} placeholder="CC(=O)OC1=CC=CC=C1C(=O)O" />
               </label>
+              <LoadingLine active={isLoading("molecule")} label="Molecule descriptor" />
               {moleculeResult ? (
                 <div className="mt-4 grid gap-3 sm:grid-cols-3">
                   {[
@@ -392,20 +476,24 @@ export default function Home() {
                 </label>
               </div>
               <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                <button className="h-10 rounded-md bg-teal-700 px-3 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50" disabled={busy === "run"} onClick={() => runAction("run", () => requestJson<JsonValue>(`/matching/run/${sampleId}?${operationParams}`, { method: "POST" }), setOperationResult)}>
-                  Run matching
+                <button className="h-10 rounded-md bg-teal-700 px-3 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50" disabled={isLoading("run")} onClick={() => runAction("run", () => requestJson<JsonValue>(`/matching/run/${sampleId}?${operationParams}`, { method: "POST" }), setOperationResult)}>
+                  {buttonText(isLoading("run"), "Run matching", "Matching...")}
                 </button>
-                <button className="h-10 rounded-md bg-slate-900 px-3 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50" disabled={busy === "score"} onClick={() => runAction("score", () => requestJson<JsonValue>(`/matching/score-ms2/${sampleId}?${scoringParams}`, { method: "POST" }), setOperationResult)}>
-                  Score MS2
+                <button className="h-10 rounded-md bg-slate-900 px-3 text-sm font-semibold text-white hover:bg-slate-700 disabled:opacity-50" disabled={isLoading("score")} onClick={() => runAction("score", () => requestJson<JsonValue>(`/matching/score-ms2/${sampleId}?${scoringParams}`, { method: "POST" }), setOperationResult)}>
+                  {buttonText(isLoading("score"), "Score MS2", "Scoring...")}
                 </button>
-                <button className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50" disabled={busy === "run-task"} onClick={() => runAction("run-task", () => requestJson<JsonValue>(`/matching/run-task/${sampleId}?${operationParams}`, { method: "POST" }), setOperationResult)}>
-                  Queue matching
+                <button className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50" disabled={isLoading("run-task")} onClick={() => runAction("run-task", () => requestJson<JsonValue>(`/matching/run-task/${sampleId}?${operationParams}`, { method: "POST" }), setOperationResult)}>
+                  {buttonText(isLoading("run-task"), "Queue matching", "Queueing...")}
                 </button>
-                <button className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50" disabled={busy === "score-task"} onClick={() => runAction("score-task", () => requestJson<JsonValue>(`/matching/score-ms2-task/${sampleId}?${scoringParams}`, { method: "POST" }), setOperationResult)}>
-                  Queue MS2
+                <button className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50" disabled={isLoading("score-task")} onClick={() => runAction("score-task", () => requestJson<JsonValue>(`/matching/score-ms2-task/${sampleId}?${scoringParams}`, { method: "POST" }), setOperationResult)}>
+                  {buttonText(isLoading("score-task"), "Queue MS2", "Queueing...")}
                 </button>
               </div>
               <div className="mt-4">
+                <LoadingLine active={isLoading("run")} label="m/z matching" />
+                <LoadingLine active={isLoading("score")} label="MS2 scoring" />
+                <LoadingLine active={isLoading("run-task")} label="Queued m/z matching" />
+                <LoadingLine active={isLoading("score-task")} label="Queued MS2 scoring" />
                 <ResultBlock data={operationResult} />
               </div>
             </div>
@@ -417,20 +505,25 @@ export default function Home() {
                   <p className="mt-1 text-sm text-slate-600">Fetch result tables and matching summary.</p>
                 </div>
                 <div className="flex flex-wrap gap-2">
-                  <button className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50" onClick={() => runAction("results", () => requestJson<MatchingResults>(`/matching/results/${sampleId}?limit=100`), setMatchingResults)}>
-                    Results
+                  <button className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50" disabled={isLoading("results")} onClick={() => runAction("results", () => requestJson<MatchingResults>(`/matching/results/${sampleId}?limit=100`), setMatchingResults)}>
+                    {buttonText(isLoading("results"), "Results", "Loading...")}
                   </button>
-                  <button className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50" onClick={() => runAction("ranked", () => requestJson<JsonValue>(`/matching/ranked-results/${sampleId}?limit_features=50&candidates_per_feature=3`), setRankedResults)}>
-                    Ranked
+                  <button className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50" disabled={isLoading("ranked")} onClick={() => runAction("ranked", () => requestJson<JsonValue>(`/matching/ranked-results/${sampleId}?limit_features=50&candidates_per_feature=3`), setRankedResults)}>
+                    {buttonText(isLoading("ranked"), "Ranked", "Loading...")}
                   </button>
-                  <button className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50" onClick={() => runAction("summary", () => requestJson<JsonValue>(`/matching/summary/${sampleId}?ppm_tolerance=${ppmTolerance}&ms2_threshold=${minMs2Score}&top_limit=10`), setSummary)}>
-                    Summary
+                  <button className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-50" disabled={isLoading("summary")} onClick={() => runAction("summary", () => requestJson<JsonValue>(`/matching/summary/${sampleId}?ppm_tolerance=${ppmTolerance}&ms2_threshold=${minMs2Score}&top_limit=10`), setSummary)}>
+                    {buttonText(isLoading("summary"), "Summary", "Loading...")}
                   </button>
-                  <button className="h-10 rounded-md bg-teal-700 px-3 text-sm font-semibold text-white hover:bg-teal-800" onClick={exportCsv}>
-                    Export CSV
+                  <button className="h-10 rounded-md bg-teal-700 px-3 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-50" disabled={isLoading("export")} onClick={exportCsv}>
+                    {buttonText(isLoading("export"), "Export CSV", "Exporting...")}
                   </button>
                 </div>
               </div>
+
+              <LoadingLine active={isLoading("results")} label="Results fetch" />
+              <LoadingLine active={isLoading("ranked")} label="Ranked results fetch" />
+              <LoadingLine active={isLoading("summary")} label="Summary fetch" />
+              <LoadingLine active={isLoading("export")} label="CSV export" />
 
               {matchingResults?.results?.length ? (
                 <div className="overflow-x-auto rounded-md border border-slate-200">
