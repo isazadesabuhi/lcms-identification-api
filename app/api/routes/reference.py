@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.db.database import get_db
 from app.services.ingestion_service import import_reference_mgf
+from app.services.upload_naming import resolve_upload_name
 
 router = APIRouter()
 
@@ -16,9 +17,9 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 @router.post("/upload-mgf")
 async def upload_reference_mgf(
-    library_name: str = Form(...),
     ion_mode: str = Form(...),
     file: UploadFile = File(...),
+    library_name: str | None = Form(default=None),
     db: Session = Depends(get_db),
 ):
     """
@@ -28,7 +29,9 @@ async def upload_reference_mgf(
     - 20241003_enamdisc_pos_ms2.mgf
     """
 
-    if not file.filename.lower().endswith(".mgf"):
+    filename = Path(file.filename or "reference.mgf").name
+
+    if not filename.lower().endswith(".mgf"):
         return {"error": "Only .mgf files are supported for reference upload."}
 
     ion_mode = ion_mode.upper()
@@ -36,7 +39,13 @@ async def upload_reference_mgf(
     if ion_mode not in ["NEG", "POS"]:
         return {"error": "ion_mode must be either NEG or POS."}
 
-    safe_filename = f"{uuid4()}_{file.filename}"
+    resolved_library_name = resolve_upload_name(
+        provided_name=library_name,
+        kind="reference",
+        ion_mode=ion_mode,
+        source_filename=filename,
+    )
+    safe_filename = f"{uuid4()}_{filename}"
     file_path = UPLOAD_DIR / safe_filename
 
     with open(file_path, "wb") as buffer:
@@ -46,13 +55,13 @@ async def upload_reference_mgf(
     result = import_reference_mgf(
         db=db,
         file_path=file_path,
-        library_name=library_name,
+        library_name=resolved_library_name,
         ion_mode=ion_mode,
     )
 
     return {
         "message": "Reference MGF imported successfully.",
-        "uploaded_file": file.filename,
+        "uploaded_file": filename,
         "stored_file": str(file_path),
         **result,
     }

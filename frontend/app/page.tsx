@@ -243,8 +243,8 @@ export default function Home() {
     const mgf = form.elements.namedItem("mgf_file") as HTMLInputElement;
     const body = new FormData();
 
-    body.append("sample_name", sampleName);
     body.append("ion_mode", sampleIonMode);
+    if (sampleName.trim()) body.append("sample_name", sampleName.trim());
     if (csv.files?.[0]) body.append("csv_file", csv.files[0]);
     if (mgf.files?.[0]) body.append("mgf_file", mgf.files[0]);
 
@@ -257,8 +257,8 @@ export default function Home() {
     const file = form.elements.namedItem("reference_file") as HTMLInputElement;
     const body = new FormData();
 
-    body.append("library_name", referenceLibrary);
     body.append("ion_mode", referenceIonMode);
+    if (referenceLibrary.trim()) body.append("library_name", referenceLibrary.trim());
     if (file.files?.[0]) body.append("file", file.files[0]);
 
     await runAction("reference-upload", () => requestJson<JsonValue>("/reference/upload-mgf", { method: "POST", body }), setReferenceUploadResult);
@@ -375,7 +375,7 @@ export default function Home() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="text-sm font-medium text-slate-700">
                   Sample name
-                  <input className="mt-1 h-10 w-full rounded-md border border-slate-300 px-3 outline-none focus:border-teal-600" required value={sampleName} onChange={(event) => setSampleName(event.target.value)} />
+                  <input className="mt-1 h-10 w-full rounded-md border border-slate-300 px-3 outline-none focus:border-teal-600" value={sampleName} onChange={(event) => setSampleName(event.target.value)} placeholder="Auto-generated if blank" />
                 </label>
                 <label className="text-sm font-medium text-slate-700">
                   Ion mode
@@ -412,7 +412,7 @@ export default function Home() {
               <div className="grid gap-3 sm:grid-cols-2">
                 <label className="text-sm font-medium text-slate-700">
                   Library name
-                  <input className="mt-1 h-10 w-full rounded-md border border-slate-300 px-3 outline-none focus:border-teal-600" required value={referenceLibrary} onChange={(event) => setReferenceLibrary(event.target.value)} />
+                  <input className="mt-1 h-10 w-full rounded-md border border-slate-300 px-3 outline-none focus:border-teal-600" value={referenceLibrary} onChange={(event) => setReferenceLibrary(event.target.value)} placeholder="Auto-generated if blank" />
                 </label>
                 <label className="text-sm font-medium text-slate-700">
                   Ion mode
