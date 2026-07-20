@@ -188,12 +188,35 @@ export default function Home() {
 
   async function requestJson<T>(path: string, options?: RequestInit): Promise<T> {
     setError(null);
-    const response = await fetch(`${cleanBase}${path}`, options);
-    const text = await response.text();
-    const payload = text ? JSON.parse(text) : null;
+    const url = `${cleanBase}${path}`;
+    let response: Response;
 
-    if (!response.ok || payload?.error) {
-      throw new Error(payload?.detail ?? payload?.error ?? `Request failed with ${response.status}`);
+    try {
+      response = await fetch(url, options);
+    } catch {
+      throw new Error(
+        `Network request failed for ${url}. Check that the backend URL is HTTPS, the Render service is running, and CORS_ORIGINS includes this Vercel domain.`,
+      );
+    }
+
+    const text = await response.text();
+    let payload: JsonValue | null = null;
+
+    if (text) {
+      try {
+        payload = JSON.parse(text) as JsonValue;
+      } catch {
+        throw new Error(
+          `Backend returned non-JSON for ${url}. Status ${response.status}. Content-Type: ${response.headers.get("content-type") ?? "unknown"}. Body starts: ${text.slice(0, 160)}`,
+        );
+      }
+    }
+
+    const apiError = payload && typeof payload === "object" && !Array.isArray(payload) ? payload.error : null;
+    const apiDetail = payload && typeof payload === "object" && !Array.isArray(payload) ? payload.detail : null;
+
+    if (!response.ok || apiError) {
+      throw new Error(String(apiDetail ?? apiError ?? `Request failed for ${url} with status ${response.status}`));
     }
 
     return payload as T;
@@ -268,7 +291,8 @@ export default function Home() {
       const response = await fetch(`${cleanBase}/matching/export-csv/${sampleId}?${params}`);
 
       if (!response.ok) {
-        throw new Error(`CSV export failed with ${response.status}`);
+        const text = await response.text();
+        throw new Error(`CSV export failed with status ${response.status}. Body starts: ${text.slice(0, 160)}`);
       }
 
       const blob = await response.blob();
